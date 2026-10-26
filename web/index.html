@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14532d">
+<title>Hybrid-Flow</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 3C11 11 7 15 7 20a9 9 0 0 0 18 0c0-5-4-9-9-17z' fill='%2316a34a'/></svg>">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" class="logo"><path d="M16 3C11 11 7 15 7 20a9 9 0 0 0 18 0c0-5-4-9-9-17z"/></svg>
+    <div>
+      <div class="farm" id="farmName">Hybrid-Flow</div>
+      <div class="sub"><span class="dot" id="connDot"></span><span id="connText">Connecting…</span> · <span id="clock">--:--</span></div>
+    </div>
+  </div>
+  <button class="mode-pill" id="modePill" data-auth>AUTO</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="dash" class="active">Dashboard</button>
+  <button data-tab="control">Control</button>
+  <button data-tab="weather">Weather</button>
+  <button data-tab="history">History</button>
+  <button data-tab="log">Log</button>
+  <button data-tab="settings">Settings</button>
+</nav>
+
+<main>
+  <div id="demoBanner" class="demo hidden">Demo mode — simulated farm data. Flash the ESP32 to see your real field.</div>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section id="tab-dash" class="tab active">
+    <div class="status" id="statusBox">
+      <div class="status-icon" id="statusIcon"></div>
+      <div class="status-body">
+        <div class="status-label" id="statusLabel">Status</div>
+        <div class="status-text" id="statusText">Waiting for controller…</div>
+      </div>
+    </div>
+    <div id="alarmBox" class="alarms hidden">
+      <ul id="alarmList"></ul>
+      <button class="btn small danger" id="ackBtn" data-auth>Acknowledge alarms</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-h">Soil moisture</div>
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 120 120" class="gauge" id="soilGauge">
+            <circle cx="60" cy="60" r="50" class="g-bg"/>
+            <circle cx="60" cy="60" r="50" class="g-fg" id="soilArc"/>
+            <line id="markStart" class="g-mark start" x1="60" y1="4" x2="60" y2="18"/>
+            <line id="markStop" class="g-mark stop" x1="60" y1="4" x2="60" y2="18"/>
+          </svg>
+          <div class="gauge-val"><span id="soilVal">--</span><small>%</small></div>
+        </div>
+        <div class="card-f" id="soilFoot">Start below -- · stop at --</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Water tank</div>
+        <div class="tank-wrap">
+          <div class="tank"><div class="tank-fill" id="tankFill"></div><div class="tank-min" id="tankMin"></div></div>
+          <div>
+            <div class="big"><span id="tankVal">--</span><small>%</small></div>
+            <div class="muted" id="tankL">-- L</div>
+          </div>
+        </div>
+        <div class="card-f" id="tankFoot">&nbsp;</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Rain in the field</div>
+        <div class="rain-wrap">
+          <div class="rain-icon" id="rainIcon"></div>
+          <div>
+            <div class="big" id="rainVal">--</div>
+            <div class="muted" id="rainSub">&nbsp;</div>
+          </div>
+        </div>
+        <div class="card-f" id="rainFoot">&nbsp;</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Air</div>
+        <div class="pair">
+          <div><div class="big"><span id="tempVal">--</span><small>°C</small></div><div class="muted">Temperature</div></div>
+          <div><div class="big"><span id="humVal">--</span><small>%</small></div><div class="muted">Humidity</div></div>
+        </div>
+        <div class="card-f" id="airFoot">&nbsp;</div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Pump</div>
+        <div class="pair">
+          <div><div class="big" id="pumpBig">--</div><div class="muted" id="pumpState">&nbsp;</div></div>
+          <div><div class="big">~<span id="runL">0</span><small>L</small></div><div class="muted" id="runTime">this run</div></div>
+        </div>
+        <div class="card-f">
+          <button class="btn primary wide" id="quickPump" data-auth>Start pump (10 min)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Water usage</div>
+        <div class="pair">
+          <div><div class="big"><span id="todayL">--</span><small>L</small></div><div class="muted">Today</div></div>
+          <div><div class="big good"><span id="savedL">--</span><small>L</small></div><div class="muted">Saved by rain</div></div>
+        </div>
+        <div class="card-f" id="usageFoot">&nbsp;</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Rain forecast — next 12 hours <span class="muted" id="fcSummary"></span></div>
+      <div class="bars" id="dashBars"></div>
+    </div>
+  </section>
+
+  <!-- ================= CONTROL ================= -->
+  <section id="tab-control" class="tab">
+    <div class="card">
+      <div class="card-h">Operating mode</div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="auto" data-auth>Automatic</button>
+        <button data-mode="manual" data-auth>Manual only</button>
+      </div>
+      <p class="muted">Automatic: the controller decides using soil, rain sensor, forecast and tank. Manual only: the pump runs only when you start it. Safety protections stay on in both modes.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Manual watering</div>
+      <div class="seg" id="runBySeg">
+        <button data-by="time" class="active">By time</button>
+        <button data-by="litres">By litres</button>
+      </div>
+      <div class="presets" id="presets"></div>
+      <div class="row">
+        <input type="number" id="runAmount" min="1" value="10">
+        <span class="muted" id="runUnit">minutes</span>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="startBtn" data-auth>Start watering</button>
+        <button class="btn danger" id="stopBtn" data-auth>Stop pump</button>
+      </div>
+      <div class="muted" id="runInfo"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Pause automation</div>
+      <p class="muted">Useful while spraying, harvesting or repairing pipes.</p>
+      <div class="row">
+        <button class="btn" data-pause="2" data-auth>2 h</button>
+        <button class="btn" data-pause="6" data-auth>6 h</button>
+        <button class="btn" data-pause="24" data-auth>24 h</button>
+        <button class="btn" data-pause="72" data-auth>3 days</button>
+        <button class="btn primary" id="resumeBtn" data-auth>Resume</button>
+      </div>
+      <div class="muted" id="pauseInfo"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Why is the controller doing this?</div>
+      <table class="why" id="whyTable"></table>
+    </div>
+  </section>
+
+  <!-- ================= WEATHER ================= -->
+  <section id="tab-weather" class="tab">
+    <div class="card">
+      <div class="card-h">Now at the farm <span class="muted" id="wxAge"></span></div>
+      <div class="wx-now" id="wxNow"></div>
+    </div>
+    <div class="card">
+      <div class="card-h">Next 12 hours</div>
+      <div class="bars tall" id="wxBars"></div>
+    </div>
+    <div class="days" id="wxDays"></div>
+    <div class="card">
+      <div class="card-h">Forecast reliability at your field</div>
+      <div class="pair">
+        <div><div class="big good" id="fcHits">--</div><div class="muted">Forecast rain arrived</div></div>
+        <div><div class="big warn" id="fcMiss">--</div><div class="muted">Forecast rain missed</div></div>
+        <div><div class="big" id="fcNeed">--</div><div class="muted">Probability needed to wait</div></div>
+      </div>
+      <p class="muted">The rain-drop sensor checks every forecast. If forecasts for your location are often wrong, Hybrid-Flow automatically demands a higher rain probability before it delays watering.</p>
+      <button class="btn small" id="wxRefresh" data-auth>Refresh forecast now</button>
+    </div>
+  </section>
+
+  <!-- ================= HISTORY ================= -->
+  <section id="tab-history" class="tab">
+    <div class="card"><div class="card-h">Soil moisture (24 h)</div><div class="chart" id="chMoist"></div></div>
+    <div class="card"><div class="card-h">Tank level (24 h)</div><div class="chart" id="chTank"></div></div>
+    <div class="card"><div class="card-h">Temperature &amp; humidity (24 h)</div><div class="chart" id="chAir"></div></div>
+    <div class="card"><div class="card-h">Water used per day (14 days)</div><div class="chart" id="chDaily"></div></div>
+    <div class="card">
+      <div class="card-h">Lifetime</div>
+      <div class="pair">
+        <div><div class="big" id="lifeTotal">--</div><div class="muted">Litres used</div></div>
+        <div><div class="big good" id="lifeSaved">--</div><div class="muted">Litres saved</div></div>
+        <div><div class="big" id="lifePump">--</div><div class="muted">Pump hours</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= LOG ================= -->
+  <section id="tab-log" class="tab">
+    <div class="card">
+      <div class="card-h">Event log <button class="btn small" id="logRefresh">Refresh</button></div>
+      <ul class="log" id="logList"></ul>
+    </div>
+  </section>
+
+  <!-- ================= SETTINGS ================= -->
+  <section id="tab-settings" class="tab">
+    <form id="settingsForm">
+      <div class="card">
+        <div class="card-h">Farm &amp; location</div>
+        <label>Farm name <input name="farmName" maxlength="31"></label>
+        <div class="row2">
+          <label>Latitude <input name="lat" type="number" step="0.0001"></label>
+          <label>Longitude <input name="lon" type="number" step="0.0001"></label>
+        </div>
+        <button type="button" class="btn small" id="geoBtn">Use my phone's location</button>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Watering thresholds (soil moisture %)</div>
+        <div class="row3">
+          <label>Start below <input name="moistStart" type="number" min="1" max="95"></label>
+          <label>Stop at <input name="moistStop" type="number" min="2" max="100"></label>
+          <label>Critical <input name="moistCritical" type="number" min="0" max="90"></label>
+        </div>
+        <p class="muted">Below "critical" the crop is in danger: the controller waters even if rain is forecast or it is outside the watering window.</p>
+        <div class="row2">
+          <label>Max run per session (min) <input name="maxRunMin" type="number" min="1" max="180"></label>
+          <label>Daily water limit (L, 0 = none) <input name="dailyLimitL" type="number" min="0"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="cycleSoak"> Cycle &amp; soak (pulse irrigation — less runoff, deeper roots)</label>
+        <div class="row2">
+          <label>Run for (min) <input name="cycleRunMin" type="number" min="1" max="120"></label>
+          <label>Then soak (min) <input name="soakMin" type="number" min="1" max="120"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Rain &amp; weather</div>
+        <label class="check"><input type="checkbox" name="weatherEnabled"> Use weather forecast (Open-Meteo, free)</label>
+        <div class="row3">
+          <label>Rain chance ≥ (%) <input name="rainProbPct" type="number" min="10" max="100"></label>
+          <label>Rain amount ≥ (mm) <input name="rainMm" type="number" step="0.1" min="0"></label>
+          <label>Look ahead (h) <input name="lookaheadH" type="number" min="1" max="12"></label>
+        </div>
+        <div class="row3">
+          <label>Max wait for rain (h) <input name="maxWaitH" type="number" min="1" max="48"></label>
+          <label>After rain, wait (min) <input name="rainLockoutMin" type="number" min="0" max="1440"></label>
+          <label>Update every (min) <input name="weatherIntervalMin" type="number" min="10" max="360"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Watering windows &amp; heat</div>
+        <label class="check"><input type="checkbox" name="windowEnabled"> Only water in these hours (less evaporation)</label>
+        <div class="row4">
+          <label>Morning from <input name="w1Start" type="number" min="0" max="24"></label>
+          <label>to <input name="w1End" type="number" min="0" max="24"></label>
+          <label>Evening from <input name="w2Start" type="number" min="0" max="24"></label>
+          <label>to <input name="w2End" type="number" min="0" max="24"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="heatBoost"> Heat-stress boost</label>
+        <div class="row2">
+          <label>When hotter than (°C) <input name="heatTempC" type="number" step="0.5"></label>
+          <label>Raise thresholds by (%) <input name="heatBoostPct" type="number" min="0" max="30"></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Tank</div>
+        <div class="row3">
+          <label>Capacity (L) <input name="tankCapacityL" type="number" min="1"></label>
+          <label>Stop below (%) <input name="tankMinPct" type="number" min="0" max="90"></label>
+          <label>&nbsp;</label>
+        </div>
+        <div class="row2">
+          <label>Distance when empty (cm) <input name="tankEmptyCm" type="number" step="0.1"></label>
+          <label>Distance when full (cm) <input name="tankFullCm" type="number" step="0.1"></label>
+        </div>
+        <div class="calib">
+          <span>Live distance: <b id="calDist">--</b> cm</span>
+          <button type="button" class="btn small" data-cmd="calib_tank_empty" data-auth>Tank is empty now</button>
+          <button type="button" class="btn small" data-cmd="calib_tank_full" data-auth>Tank is full now</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Sensor calibration</div>
+        <div class="row3">
+          <label>Soil dry raw <input name="soilDryRaw" type="number" min="0" max="4095"></label>
+          <label>Soil wet raw <input name="soilWetRaw" type="number" min="0" max="4095"></label>
+          <label>Rain if AO below <input name="rainWetRaw" type="number" min="0" max="4095"></label>
+        </div>
+        <div class="calib">
+          <span>Live soil raw: <b id="calSoil">--</b> · rain raw: <b id="calRain">--</b></span>
+          <button type="button" class="btn small" data-cmd="calib_soil_dry" data-auth>Probe in dry soil now</button>
+          <button type="button" class="btn small" data-cmd="calib_soil_wet" data-auth>Probe in wet soil now</button>
+        </div>
+        <p class="muted">Resistive probe: calibrate in your own field soil, not air or water. Tap "dry" when the soil is at its driest, and "wet" about 30 minutes after a thorough watering. Higher raw = drier. If you add fertilizer, re-check the "wet" value, because salts change the reading.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-h">Pump &amp; protection</div>
+        <div class="row3">
+          <label>Pump flow rate (L/min) <input name="pumpLpm" type="number" step="0.1" min="0.1"></label>
+          <label>Dry-run check after (min, 0 = off) <input name="dryRunMin" type="number" min="0" max="60"></label>
+          <label>Leak alarm: tank drop % in 30 min (0 = off) <input name="leakPct" type="number" min="0" max="50"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="relayActiveLow"> Relay switches ON with a LOW signal (most relay modules). Untick if your pump runs when it should be off.</label>
+        <p class="muted">There is no flow sensor, so litres are estimated as pump rate × running time. To measure the rate, run the pump into a bucket for 1 minute, or read the "Tank dropped … pump ≈ … L/min" line in the Log after a run. The tank sensor protects the pump: if the tank level doesn't fall while pumping, the pump is dry or blocked. Set dry-run check to 0 if the tank is refilled while you irrigate.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-h">WiFi &amp; security</div>
+        <div class="row2">
+          <label>Farm WiFi name <input name="wifiSsid" maxlength="32" autocomplete="off"></label>
+          <label>WiFi password <input name="wifiPass" type="password" maxlength="64" autocomplete="new-password"></label>
+        </div>
+        <label>New admin password (leave blank to keep) <input name="adminPass" type="password" minlength="4" maxlength="32" autocomplete="new-password"></label>
+        <div class="muted" id="netInfo"></div>
+      </div>
+
+      <div class="savebar">
+        <button type="submit" class="btn primary" data-auth>Save settings</button>
+        <span class="muted" id="saveMsg"></span>
+      </div>
+    </form>
+
+    <div class="card">
+      <div class="card-h">Maintenance</div>
+      <label>Firmware update (.bin) <input type="file" id="otaFile" accept=".bin"></label>
+      <div class="row">
+        <button class="btn" id="otaBtn" data-auth>Upload firmware</button>
+        <button class="btn" data-cmd="reboot" data-auth>Reboot controller</button>
+        <button class="btn danger" data-cmd="reset_stats" data-confirm="Reset all water statistics?" data-auth>Reset statistics</button>
+      </div>
+      <div class="muted" id="sysInfo"></div>
+    </div>
+  </section>
+</main>
+
+<div class="modal hidden" id="loginModal">
+  <form class="modal-box" id="loginForm">
+    <h3>Admin password</h3>
+    <p class="muted">Required to control the pump or change settings.</p>
+    <input type="password" id="loginPass" autocomplete="current-password" placeholder="Password">
+    <label class="check"><input type="checkbox" id="loginRemember" checked> Remember on this device</label>
+    <div class="muted err" id="loginErr"></div>
+    <div class="row">
+      <button type="button" class="btn" id="loginCancel">Cancel</button>
+      <button type="submit" class="btn primary">Unlock</button>
+    </div>
+  </form>
+</div>
+<div class="toast hidden" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
